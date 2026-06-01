@@ -41,3 +41,30 @@ export const authorize = (...roles) => {
         next();
     };
 };
+
+// Optional auth — attaches req.user if valid token present, but never blocks unauthenticated requests
+export const optionalProtect = async (req, res, next) => {
+    let token;
+
+    if (req.cookies.token) {
+        token = req.cookies.token;
+    } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1];
+    }
+
+    if (!token) {
+        req.user = null;
+        return next(); // Allow unauthenticated — controller decides what to return
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.id);
+        req.user = (user && !user.isBlocked) ? user : null;
+        next();
+    } catch {
+        req.user = null;
+        next(); // Invalid token still allowed, just no user attached
+    }
+};
+

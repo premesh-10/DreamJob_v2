@@ -314,7 +314,10 @@ export const getMyBookings = async (req, res, next) => {
 // @access  Private/Seller
 export const getSellerBookings = async (req, res, next) => {
     try {
-        const bookings = await Booking.find({ seller: req.user.id })
+        const bookings = await Booking.find({ 
+            seller: req.user.id,
+            user: { $ne: req.user.id }
+        })
             .populate('user', 'name email')
             .populate({
                 path: 'interview',

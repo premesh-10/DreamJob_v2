@@ -25,7 +25,8 @@ const sendTokenResponse = (user, statusCode, res) => {
             role: user.role,
             mobile: user.mobile,
             subscription: user.subscription,
-            walletBalance: user.walletBalance
+            walletBalance: user.walletBalance,
+            profilePic: user.profilePic
         }
     });
 };

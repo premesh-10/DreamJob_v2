@@ -2,7 +2,8 @@ import express from 'express';
 import {
     applySeller, getSellers, updateSellerStatus, getMyApplicationStatus,
     getMySellerProfile, updateMySellerProfile, getMySellerStats,
-    requestWithdrawal, getWithdrawalRequests, processWithdrawal
+    requestWithdrawal, getWithdrawalRequests, processWithdrawal,
+    adjustSellerWallet
 } from '../controllers/sellerController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 
@@ -31,5 +32,8 @@ router.put('/:id/status', protect, authorize('admin', 'super_admin'), updateSell
 
 // Admin — withdrawal processing  (sellerId/withdrawals/withdrawalId)
 router.put('/:sellerId/withdrawals/:withdrawalId', protect, authorize('admin', 'super_admin', 'finance_admin'), processWithdrawal);
+
+// Admin — seller wallet adjustment
+router.post('/:id/wallet-adjust', protect, authorize('admin', 'super_admin'), adjustSellerWallet);
 
 export default router;

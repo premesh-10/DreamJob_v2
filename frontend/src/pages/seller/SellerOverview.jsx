@@ -6,7 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function StatCard({ icon, label, value, sub, color = 'indigo' }) {
-    const colors = { indigo: 'from-indigo-500 to-indigo-600', violet: 'from-violet-500 to-violet-600', emerald: 'from-emerald-500 to-emerald-600', sky: 'from-sky-500 to-sky-600' };
+    const colors = { indigo: 'from-indigo-500 to-indigo-600', violet: 'from-violet-500 to-violet-600', emerald: 'from-emerald-500 to-emerald-600', sky: 'from-sky-500 to-sky-600', amber: 'from-amber-500 to-amber-600' };
     return (
         <div className={`bg-gradient-to-br ${colors[color]} rounded-2xl p-6 text-white shadow-lg`}>
             <div className="text-3xl mb-2">{icon}</div>
@@ -68,10 +68,11 @@ function SellerOverview() {
                 )}
 
                 {/* Stat cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
                     <StatCard icon="💰" label="Total Earnings" value={`$${stats?.totalEarnings?.toFixed(2) || '0.00'}`} color="indigo" />
+                    <StatCard icon="💵" label="Available Balance" value={`$${stats?.presentBalance?.toFixed(2) || '0.00'}`} color="emerald" />
                     <StatCard icon="🎓" label="Total Students" value={stats?.totalStudents || 0} color="violet" />
-                    <StatCard icon="📚" label="My Courses" value={profile?.totalCourses || 0} color="emerald" />
+                    <StatCard icon="📚" label="My Courses" value={profile?.totalCourses || 0} color="amber" />
                     <StatCard icon="📦" label="Total Orders" value={orders.length || 0} sub="All time" color="sky" />
                 </div>
 

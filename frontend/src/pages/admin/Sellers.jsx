@@ -17,6 +17,8 @@ function AdminSellers() {
     const [loading, setLoading] = useState(true);
     const [globalFilter, setGlobalFilter] = useState('');
     const [viewSeller, setViewSeller] = useState(null);
+    const [walletForm, setWalletForm] = useState({ show: false, action: 'add', amount: '', description: '' });
+    const [adjustingWallet, setAdjustingWallet] = useState(false);
 
     useEffect(() => {
         const fetchSellers = async () => {
@@ -35,7 +37,7 @@ function AdminSellers() {
     const handleStatusChange = async (sellerId, newStatus) => {
         if(window.confirm(`Change seller status to ${newStatus}?`)) {
             try {
-                await api.put(`/sellers/${sellerId}/status`, { status: newStatus });
+                await api.patch(`/sellers/${sellerId}/status`, { status: newStatus });
                 alert('Seller status updated successfully');
                 // Refresh data
                 const { data } = await api.get('/admin/sellers');
@@ -43,6 +45,27 @@ function AdminSellers() {
             } catch (error) {
                 alert('Failed to update seller status');
             }
+        }
+    };
+
+    const handleWalletAdjust = async (e) => {
+        e.preventDefault();
+        setAdjustingWallet(true);
+        try {
+            const { data } = await api.patch(`/sellers/${viewSeller._id}/wallet`, {
+                action: walletForm.action,
+                amount: walletForm.amount,
+                description: walletForm.description
+            });
+            alert(data.message);
+            // Refresh viewSeller and table data
+            setViewSeller(data.data);
+            setSellers(prev => prev.map(s => s._id === data.data._id ? data.data : s));
+            setWalletForm({ show: false, action: 'add', amount: '', description: '' });
+        } catch (error) {
+            alert(error.response?.data?.message || 'Failed to adjust wallet');
+        } finally {
+            setAdjustingWallet(false);
         }
     };
 
@@ -76,8 +99,12 @@ function AdminSellers() {
                 </span>
             )
         }),
-        columnHelper.accessor('earnings', {
-            header: 'Earnings',
+        columnHelper.accessor('lifetimeEarnings', {
+            header: 'Lifetime Earnings',
+            cell: info => <span className="font-medium text-indigo-600">${info.getValue()?.toFixed(2) || '0.00'}</span>,
+        }),
+        columnHelper.accessor('presentBalance', {
+            header: 'Present Balance',
             cell: info => <span className="font-medium text-emerald-600">${info.getValue()?.toFixed(2) || '0.00'}</span>,
         }),
         columnHelper.display({
@@ -142,7 +169,8 @@ function AdminSellers() {
                                 { header: 'Content Type', key: 'contentType' },
                                 { header: 'Expertise', key: 'targetedCourse' },
                                 { header: 'Status', key: 'status' },
-                                { header: 'Earnings', key: 'earnings', format: (v) => `$${(v || 0).toFixed(2)}` },
+                                { header: 'Lifetime Earnings', key: 'lifetimeEarnings', format: (v) => `$${(v || 0).toFixed(2)}` },
+                                { header: 'Present Balance', key: 'presentBalance', format: (v) => `$${(v || 0).toFixed(2)}` },
                                 { header: 'Applied On', key: 'createdAt', format: (v) => new Date(v).toLocaleDateString() },
                             ]}
                         />
@@ -239,7 +267,8 @@ function AdminSellers() {
                             {[
                                 { label: 'Content Type', value: viewSeller.contentType },
                                 { label: 'Expertise', value: viewSeller.targetedCourse || '—' },
-                                { label: 'Total Earnings', value: `$${viewSeller.earnings?.toFixed(2) || '0.00'}` },
+                                { label: 'Lifetime Earnings', value: `$${viewSeller.lifetimeEarnings?.toFixed(2) || '0.00'}` },
+                                { label: 'Present Balance', value: `$${viewSeller.presentBalance?.toFixed(2) || '0.00'}` },
                                 { label: 'Courses Created', value: viewSeller.courseCount ?? viewSeller.totalCourses ?? 0 },
                                 { label: 'Total Students', value: viewSeller.totalStudents ?? 0 },
                                 { label: 'Member Since', value: new Date(viewSeller.createdAt).toLocaleDateString() },
@@ -274,7 +303,62 @@ function AdminSellers() {
                             </div>
                         )}
 
-                        <button onClick={() => setViewSeller(null)}
+                        {/* Wallet Adjust Form */}
+                        <div className="mb-5 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-sm font-bold text-slate-800">Adjust Wallet Balance</h3>
+                                <button onClick={() => setWalletForm(p => ({ ...p, show: !p.show }))}
+                                    className="text-xs text-indigo-600 font-medium hover:underline">
+                                    {walletForm.show ? 'Cancel' : 'Adjust'}
+                                </button>
+                            </div>
+                            
+                            {walletForm.show && (
+                                <form onSubmit={handleWalletAdjust} className="space-y-3">
+                                    <div className="flex gap-2">
+                                        <select
+                                            value={walletForm.action}
+                                            onChange={e => setWalletForm(p => ({ ...p, action: e.target.value }))}
+                                            className="px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-indigo-500 bg-white"
+                                        >
+                                            <option value="add">Add (+)</option>
+                                            <option value="deduct">Deduct (-)</option>
+                                        </select>
+                                        <input
+                                            type="number"
+                                            min="0.01"
+                                            step="0.01"
+                                            required
+                                            placeholder="Amount ($)"
+                                            value={walletForm.amount}
+                                            onChange={e => setWalletForm(p => ({ ...p, amount: e.target.value }))}
+                                            className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-indigo-500"
+                                        />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Reason / Note (visible to seller)"
+                                        value={walletForm.description}
+                                        onChange={e => setWalletForm(p => ({ ...p, description: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-indigo-500"
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={adjustingWallet || !walletForm.amount}
+                                        className={`w-full py-2 rounded-lg text-sm font-bold text-white transition ${
+                                            walletForm.action === 'add' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
+                                        } disabled:opacity-60`}
+                                    >
+                                        {adjustingWallet ? 'Processing...' : `${walletForm.action === 'add' ? 'Add to' : 'Deduct from'} Wallet`}
+                                    </button>
+                                </form>
+                            )}
+                        </div>
+
+                        <button onClick={() => {
+                            setViewSeller(null);
+                            setWalletForm({ show: false, action: 'add', amount: '', description: '' });
+                        }}
                             className="w-full py-2.5 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition">
                             Close
                         </button>

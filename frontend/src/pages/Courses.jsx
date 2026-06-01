@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import api from '../lib/api';
 import Layout from '../components/Layout';
 
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:5000';
+const getFileUrl = (path) => path ? (path.startsWith('http') ? path : `${API_BASE}${path}`) : '';
+
 function Courses() {
     const [courses, setCourses] = useState([]);
     const [filteredCourses, setFilteredCourses] = useState([]);
@@ -108,9 +111,9 @@ function Courses() {
                             {filteredCourses.map(course => (
                                 <Link key={course._id} to={`/courses/${course._id}`} className="group bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-lg transition flex flex-col">
                                     <div className="aspect-video bg-slate-100 overflow-hidden">
-                                        {course.thumbnail ? (
+                                        {(course.thumbnailPath || course.thumbnail) ? (
                                             <img
-                                                src={course.thumbnail}
+                                                src={getFileUrl(course.thumbnailPath || course.thumbnail)}
                                                 alt={course.title}
                                                 className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                                             />

@@ -1,8 +1,11 @@
+import mongoose from 'mongoose';
+import multer from 'multer';
 import Seller from '../models/Seller.js';
 import User from '../models/User.js';
 import Course from '../models/Course.js';
 import Booking from '../models/Booking.js';
 import Transaction from '../models/Transaction.js';
+import { uploadAvatar, deleteUploadedFile } from '../middleware/uploadMiddleware.js';
 
 // @desc    Apply to be a seller
 // @route   POST /api/v1/sellers/apply
@@ -61,18 +64,18 @@ export const getMySellerProfile = async (req, res, next) => {
 
         // Compute live stats
         const totalCourses = await Course.countDocuments({ seller: req.user.id });
-        const totalStudents = await Course.aggregate([
-            { $match: { seller: seller.user._id } },
-            { $project: { count: { $size: '$enrolledUsers' } } },
-            { $group: { _id: null, total: { $sum: '$count' } } }
-        ]);
+        const uniqueStudents = await Booking.distinct('user', { 
+            seller: req.user.id,
+            user: { $ne: req.user.id },
+            paymentStatus: { $in: ['paid', 'free'] } 
+        });
 
         res.status(200).json({
             success: true,
             data: {
                 ...seller.toObject(),
                 totalCourses,
-                totalStudents: totalStudents[0]?.total || 0
+                totalStudents: uniqueStudents.length
             }
         });
     } catch (error) {
@@ -85,11 +88,11 @@ export const getMySellerProfile = async (req, res, next) => {
 // @access  Private/Seller
 export const updateMySellerProfile = async (req, res, next) => {
     try {
-        const { bio, profilePic, expertise, socialLinks } = req.body;
+        const { bio, expertise, socialLinks } = req.body;
 
         const seller = await Seller.findOneAndUpdate(
             { user: req.user.id },
-            { bio, profilePic, expertise, socialLinks },
+            { bio, expertise, socialLinks },
             { new: true, runValidators: false }
         ).populate('user', 'name email');
 
@@ -117,6 +120,7 @@ export const getMySellerStats = async (req, res, next) => {
             {
                 $match: {
                     seller: seller.user,
+                    user: { $ne: new mongoose.Types.ObjectId(req.user.id) },
                     paymentStatus: 'paid',
                     createdAt: { $gte: sixMonthsAgo }
                 }
@@ -134,18 +138,54 @@ export const getMySellerStats = async (req, res, next) => {
             { $sort: { '_id.year': 1, '_id.month': 1 } }
         ]);
 
+        // Integrate admin adjustments into monthly earnings
+        const adjustments = seller.withdrawals.filter(w => w.type === 'admin_adjustment' && new Date(w.processedAt || w.requestedAt) >= sixMonthsAgo);
+        
+        adjustments.forEach(adj => {
+            const date = new Date(adj.processedAt || adj.requestedAt);
+            const year = date.getFullYear();
+            const month = date.getMonth() + 1; // 1-12
+            
+            let monthData = monthlyEarnings.find(m => m._id.year === year && m._id.month === month);
+            if (!monthData) {
+                monthData = { _id: { year, month }, total: 0, count: 0 };
+                monthlyEarnings.push(monthData);
+            }
+            
+            const isDeduct = adj.adminNote?.toLowerCase().includes('deducted');
+            monthData.total += isDeduct ? -adj.amount : adj.amount;
+        });
+
+        monthlyEarnings.sort((a, b) => {
+            if (a._id.year !== b._id.year) return a._id.year - b._id.year;
+            return a._id.month - b._id.month;
+        });
+
         // Top courses by enrollment
         const topCourses = await Course.find({ seller: req.user.id })
             .select('title enrolledUsers price rating')
             .sort({ 'enrolledUsers': -1 })
             .limit(5);
 
-        const totalStudents = topCourses.reduce((acc, c) => acc + c.enrolledUsers.length, 0);
+        // Calculate unique students (distinct users who bought from this seller, excluding the seller themselves)
+        const uniqueStudents = await Booking.distinct('user', { 
+            seller: req.user.id,
+            user: { $ne: req.user.id },
+            paymentStatus: { $in: ['paid', 'free'] } 
+        });
+        const totalStudents = uniqueStudents.length;
+
+        const totalWithdrawn = seller.withdrawals
+            .filter(w => w.status === 'completed' && w.type === 'withdrawal')
+            .reduce((sum, w) => sum + (w.approvedAmount !== null ? w.approvedAmount : w.amount), 0);
+        
+        const lifetimeEarnings = seller.earnings + totalWithdrawn;
 
         res.status(200).json({
             success: true,
             data: {
-                totalEarnings: seller.earnings,
+                totalEarnings: lifetimeEarnings,
+                presentBalance: seller.earnings,
                 totalStudents,
                 monthlyEarnings,
                 topCourses: topCourses.map(c => ({
@@ -340,9 +380,20 @@ export const getSellers = async (req, res, next) => {
             .populate('user', 'name email mobile experience')
             .sort({ createdAt: -1 });
 
+        const enrichedSellers = sellers.map(seller => {
+            const sellerObj = seller.toObject();
+            const totalWithdrawn = seller.withdrawals
+                .filter(w => w.status === 'completed')
+                .reduce((sum, w) => sum + (w.approvedAmount !== null ? w.approvedAmount : w.amount), 0);
+            
+            sellerObj.lifetimeEarnings = seller.earnings + totalWithdrawn;
+            sellerObj.presentBalance = seller.earnings;
+            return sellerObj;
+        });
+
         res.status(200).json({
             success: true,
-            data: sellers
+            data: enrichedSellers
         });
     } catch (error) {
         next(error);
@@ -375,6 +426,78 @@ export const updateSellerStatus = async (req, res, next) => {
         }
 
         res.status(200).json({ success: true, data: seller });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Adjust a seller's wallet balance (earnings) (Admin)
+// @route   POST /api/v1/sellers/:id/wallet-adjust
+// @access  Private/Admin
+export const adjustSellerWallet = async (req, res, next) => {
+    try {
+        const { action, amount, description } = req.body;
+        
+        if (!['add', 'deduct'].includes(action)) {
+            return res.status(400).json({ message: 'Invalid action. Use "add" or "deduct"' });
+        }
+        
+        const parsedAmount = parseFloat(amount);
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+            return res.status(400).json({ message: 'Please provide a valid positive amount' });
+        }
+
+        const seller = await Seller.findById(req.params.id).populate('user');
+        if (!seller) return res.status(404).json({ message: 'Seller not found' });
+
+        const adminUser = await User.findById(req.user.id);
+        if (!adminUser) return res.status(404).json({ message: 'Admin user not found' });
+
+        if (action === 'add') {
+            seller.earnings += parsedAmount;
+            adminUser.walletBalance -= parsedAmount;
+        } else if (action === 'deduct') {
+            seller.earnings -= parsedAmount; // Allows negative balance per user requirements
+            adminUser.walletBalance += parsedAmount;
+        }
+
+        // Add to withdrawals array so it shows up in seller's wallet history
+        seller.withdrawals.push({
+            amount: parsedAmount,
+            status: 'completed',
+            type: 'admin_adjustment',
+            adminNote: `${action === 'add' ? 'Added' : 'Deducted'} by Admin${description ? ': ' + description : ''}`,
+            processedAt: Date.now()
+        });
+
+        await seller.save();
+        await adminUser.save();
+
+        // Log transaction for seller visibility
+        await Transaction.create({
+            user: seller.user._id,
+            type: action === 'add' ? 'credit' : 'debit',
+            amount: parsedAmount,
+            description: description || `Admin wallet adjustment (${action})`,
+            status: 'completed'
+        });
+
+        const sellerObj = seller.toObject();
+        const totalWithdrawn = seller.withdrawals
+            .filter(w => w.status === 'completed' && w.type === 'withdrawal')
+            .reduce((sum, w) => sum + (w.approvedAmount !== null ? w.approvedAmount : w.amount), 0);
+        
+        // Note: Admin additions are intrinsically reflected in `seller.earnings`. 
+        // Admin deductions reduce `seller.earnings`.
+        // So `seller.earnings + totalWithdrawn` gives the correct lifetime earnings without double counting admin_adjustments.
+        sellerObj.lifetimeEarnings = seller.earnings + totalWithdrawn;
+        sellerObj.presentBalance = seller.earnings;
+
+        res.status(200).json({
+            success: true,
+            message: `Successfully ${action === 'add' ? 'added' : 'deducted'} $${parsedAmount} ${action === 'add' ? 'to' : 'from'} seller wallet`,
+            data: sellerObj
+        });
     } catch (error) {
         next(error);
     }

@@ -13,6 +13,28 @@ function WithdrawalStageTracker({ withdrawal }) {
     const currentIdx = STAGES.findIndex(s => s.key === withdrawal.status);
     const effectiveIdx = isRejected ? 0 : currentIdx;
 
+    if (withdrawal.type === 'admin_adjustment') {
+        const isDeduct = withdrawal.adminNote?.toLowerCase().includes('deducted');
+        return (
+            <div className={`border rounded-2xl p-5 ${isDeduct ? 'border-rose-200 bg-rose-50/40' : 'border-emerald-200 bg-emerald-50/40'}`}>
+                <div className="flex items-center justify-between mb-2">
+                    <div>
+                        <p className={`font-bold text-lg ${isDeduct ? 'text-rose-700' : 'text-emerald-700'}`}>
+                            {isDeduct ? '-' : '+'}${withdrawal.amount?.toFixed(2)}
+                        </p>
+                        <p className="text-slate-500 text-xs mt-0.5">Adjusted on {new Date(withdrawal.processedAt || withdrawal.requestedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                    </div>
+                    <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide ${isDeduct ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {isDeduct ? '📉 Admin Deduction' : '📈 Admin Addition'}
+                    </span>
+                </div>
+                {withdrawal.adminNote && (
+                    <p className="text-sm text-slate-700 mt-2"><strong>Note:</strong> {withdrawal.adminNote}</p>
+                )}
+            </div>
+        );
+    }
+
     return (
         <div className={`border rounded-2xl p-5 ${isRejected ? 'border-rose-200 bg-rose-50' : 'border-indigo-100 bg-indigo-50/40'}`}>
             <div className="flex items-center justify-between mb-4">

@@ -22,7 +22,8 @@ function RevenueAnalytics() {
         Orders: m.count
     })) || [];
 
-    const thisMonth = chartData[chartData.length - 1]?.Revenue || 0;
+    const currentMonthName = MONTHS[new Date().getMonth()];
+    const thisMonth = chartData.find(c => c.name === currentMonthName)?.Revenue || 0;
     const avgPerStudent = stats?.totalStudents > 0 ? (stats.totalEarnings / stats.totalStudents).toFixed(2) : 0;
 
     if (loading) return <SellerLayout><div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div></SellerLayout>;

@@ -7,6 +7,7 @@ import Interview from '../models/Interview.js';
 import Coupon from '../models/Coupon.js';
 import Notification from '../models/Notification.js';
 import Feedback from '../models/Feedback.js';
+import { deleteUploadedFile } from '../middleware/uploadMiddleware.js';
 
 // ─── Admin Interviews ──────────────────────────────────────────────────────────
 
@@ -181,11 +182,32 @@ export const getAdminSellers = async (req, res, next) => {
             .populate('user', 'name email mobile createdAt')
             .sort({ createdAt: -1 });
 
-        // Attach course count for each seller
-        const enriched = await Promise.all(sellers.map(async (s) => {
-            const courseCount = await Course.countDocuments({ seller: s.user._id });
-            return { ...s.toObject(), courseCount };
-        }));
+        const sellerUserIds = sellers.map(s => s.user._id);
+        
+        const courseCounts = await Course.aggregate([
+            { $match: { seller: { $in: sellerUserIds } } },
+            { $group: { _id: '$seller', count: { $sum: 1 } } }
+        ]);
+
+        const courseCountMap = {};
+        courseCounts.forEach(c => {
+            courseCountMap[c._id.toString()] = c.count;
+        });
+
+        // Attach course count and earnings for each seller
+        const enriched = sellers.map(s => {
+            const sObj = s.toObject();
+            
+            const totalWithdrawn = s.withdrawals
+                .filter(w => w.status === 'completed' && w.type === 'withdrawal')
+                .reduce((sum, w) => sum + (w.approvedAmount !== null ? w.approvedAmount : w.amount), 0);
+            
+            sObj.lifetimeEarnings = s.earnings + totalWithdrawn;
+            sObj.presentBalance = s.earnings;
+            sObj.courseCount = courseCountMap[s.user._id.toString()] || 0;
+
+            return sObj;
+        });
 
         res.status(200).json({ success: true, data: enriched });
     } catch (error) { next(error); }
@@ -241,12 +263,213 @@ export const toggleCoursePublished = async (req, res, next) => {
         const course = await Course.findById(req.params.id);
         if (!course) return res.status(404).json({ message: 'Course not found' });
         course.isPublished = !course.isPublished;
+        course.approvalStatus = course.isPublished ? 'approved' : 'draft';
         await course.save();
         res.status(200).json({
             success: true,
             isPublished: course.isPublished,
+            approvalStatus: course.approvalStatus,
             message: `Course has been ${course.isPublished ? 'published' : 'unpublished'}`
         });
+    } catch (error) { next(error); }
+};
+
+// @desc    Admin force-delete a course
+// @route   DELETE /api/v1/admin/courses/:id
+export const adminDeleteCourse = async (req, res, next) => {
+    try {
+        const course = await Course.findById(req.params.id);
+        if (!course) return res.status(404).json({ message: 'Course not found' });
+        const reason = req.body.reason || req.query.reason || 'No reason provided';
+
+        // Delete all uploaded files
+        if (course.thumbnailPath) deleteUploadedFile(course.thumbnailPath);
+        course.chapters.forEach(ch => {
+            if (ch.videoPath) deleteUploadedFile(ch.videoPath);
+            if (ch.pdfPath) deleteUploadedFile(ch.pdfPath);
+        });
+        course.resources.forEach(r => {
+            if (r.filePath) deleteUploadedFile(r.filePath);
+        });
+
+        await Seller.findOneAndUpdate(
+            { user: course.seller },
+            { $inc: { totalCourses: -1 } }
+        );
+
+        const sellerId = course.seller;
+        await course.deleteOne();
+
+        await Notification.create({
+            title: 'Course Deleted by Admin',
+            message: `Your course "${course.title}" was deleted by an admin. Reason: ${reason}`,
+            targetRole: 'seller',
+            targetUser: sellerId,
+            type: 'alert',
+            createdBy: req.user.id
+        });
+
+        res.status(200).json({ success: true, message: 'Course permanently deleted by admin' });
+    } catch (error) { next(error); }
+};
+
+// @desc    Admin reject a course-level request (publish/unpublish/delete)
+// @route   PATCH /api/v1/admin/courses/:id/reject
+export const adminRejectCourseRequest = async (req, res, next) => {
+    try {
+        const course = await Course.findById(req.params.id);
+        if (!course) return res.status(404).json({ message: 'Course not found' });
+        const reason = req.body.reason || req.query.reason || 'No reason provided';
+        
+        let requestType = '';
+        if (course.approvalStatus === 'pending') {
+            course.approvalStatus = 'rejected';
+            course.isPublished = false;
+            requestType = 'Publish Request';
+        } else if (course.approvalStatus === 'pending_unpublish') {
+            course.approvalStatus = 'approved';
+            course.isPublished = true;
+            requestType = 'Unpublish Request';
+        } else if (course.approvalStatus === 'pending_delete') {
+            course.approvalStatus = course.isPublished ? 'approved' : 'draft';
+            requestType = 'Deletion Request';
+        } else {
+            return res.status(400).json({ message: 'Course is not in a pending state' });
+        }
+
+        await course.save();
+
+        await Notification.create({
+            title: `Course ${requestType} Rejected`,
+            message: `Your ${requestType.toLowerCase()} for the course "${course.title}" was rejected by an admin. Reason: ${reason}`,
+            targetRole: 'seller',
+            targetUser: course.seller,
+            type: 'warning',
+            createdBy: req.user.id
+        });
+
+        res.status(200).json({ success: true, course, message: `${requestType} rejected` });
+    } catch (error) { next(error); }
+};
+
+// @desc    Admin force-delete a chapter/video
+// @route   DELETE /api/v1/admin/courses/:id/chapters/:chapterId
+export const adminDeleteChapter = async (req, res, next) => {
+    try {
+        const course = await Course.findById(req.params.id);
+        if (!course) return res.status(404).json({ message: 'Course not found' });
+
+        const chapter = course.chapters.id(req.params.chapterId);
+        if (!chapter) return res.status(404).json({ message: 'Chapter not found' });
+
+        const reason = req.body.reason || req.query.reason || 'No reason provided';
+
+        if (chapter.videoPath) deleteUploadedFile(chapter.videoPath);
+        if (chapter.pdfPath) deleteUploadedFile(chapter.pdfPath);
+        course.chapters.pull(req.params.chapterId);
+        
+        await course.save();
+
+        await Notification.create({
+            title: 'Video Deleted by Admin',
+            message: `A video/chapter "${chapter.title}" in your course "${course.title}" was deleted by an admin. Reason: ${reason}`,
+            targetRole: 'seller',
+            targetUser: course.seller,
+            type: 'alert',
+            createdBy: req.user.id
+        });
+
+        res.status(200).json({ success: true, message: 'Chapter permanently deleted by admin', course });
+    } catch (error) { next(error); }
+};
+
+// @desc    Admin reject a chapter-level request (add/delete)
+// @route   PATCH /api/v1/admin/courses/:id/chapters/:chapterId/reject
+export const adminRejectChapterRequest = async (req, res, next) => {
+    try {
+        const course = await Course.findById(req.params.id);
+        if (!course) return res.status(404).json({ message: 'Course not found' });
+        
+        const chapter = course.chapters.id(req.params.chapterId);
+        if (!chapter) return res.status(404).json({ message: 'Chapter not found' });
+
+        const reason = req.body.reason || req.query.reason || 'No reason provided';
+        let requestType = '';
+
+        if (chapter.approvalStatus === 'pending_add') {
+            // Remove the draft chapter entirely
+            requestType = 'Chapter Addition';
+            if (chapter.videoPath) deleteUploadedFile(chapter.videoPath);
+            if (chapter.pdfPath) deleteUploadedFile(chapter.pdfPath);
+            course.chapters.pull(chapter._id);
+        } else if (chapter.approvalStatus === 'pending_delete') {
+            requestType = 'Chapter Deletion';
+            chapter.approvalStatus = 'approved';
+        } else {
+            return res.status(400).json({ message: 'Chapter is not in a pending state' });
+        }
+
+        await course.save();
+
+        await Notification.create({
+            title: `${requestType} Rejected`,
+            message: `Your ${requestType.toLowerCase()} request for chapter "${chapter.title}" in course "${course.title}" was rejected. Reason: ${reason}`,
+            targetRole: 'seller',
+            targetUser: course.seller,
+            type: 'warning',
+            createdBy: req.user.id
+        });
+
+        res.status(200).json({ success: true, course, message: `${requestType} rejected` });
+    } catch (error) { next(error); }
+};
+
+// @desc    Admin approve chapter addition/deletion
+// @route   PATCH /api/v1/admin/courses/:id/chapters/:chapterId/approve
+export const adminApproveChapter = async (req, res, next) => {
+    try {
+        const course = await Course.findById(req.params.id);
+        if (!course) return res.status(404).json({ message: 'Course not found' });
+
+        const chapter = course.chapters.id(req.params.chapterId);
+        if (!chapter) return res.status(404).json({ message: 'Chapter not found' });
+
+        if (chapter.approvalStatus === 'pending_add') {
+            chapter.approvalStatus = 'approved';
+        } else if (chapter.approvalStatus === 'pending_delete') {
+            if (chapter.videoPath) deleteUploadedFile(chapter.videoPath);
+            if (chapter.pdfPath) deleteUploadedFile(chapter.pdfPath);
+            course.chapters.pull(req.params.chapterId);
+        } else {
+            return res.status(400).json({ message: 'Chapter does not require approval' });
+        }
+
+        await course.save();
+        res.status(200).json({ success: true, message: 'Chapter approved', course });
+    } catch (error) { next(error); }
+};
+
+// @desc    Admin approve resource addition/deletion
+// @route   PATCH /api/v1/admin/courses/:id/resources/:resourceId/approve
+export const adminApproveResource = async (req, res, next) => {
+    try {
+        const course = await Course.findById(req.params.id);
+        if (!course) return res.status(404).json({ message: 'Course not found' });
+
+        const resource = course.resources.id(req.params.resourceId);
+        if (!resource) return res.status(404).json({ message: 'Resource not found' });
+
+        if (resource.approvalStatus === 'pending_add') {
+            resource.approvalStatus = 'approved';
+        } else if (resource.approvalStatus === 'pending_delete') {
+            deleteUploadedFile(resource.filePath);
+            course.resources.pull(req.params.resourceId);
+        } else {
+            return res.status(400).json({ message: 'Resource does not require approval' });
+        }
+
+        await course.save();
+        res.status(200).json({ success: true, message: 'Resource approved', course });
     } catch (error) { next(error); }
 };
 

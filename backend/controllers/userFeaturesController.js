@@ -196,9 +196,45 @@ export const getMyNotifications = async (req, res, next) => {
     try {
         const role = req.user.role;
         const notifications = await Notification.find({
-            targetRole: { $in: ['all', role] }
+            $or: [
+                { targetRole: { $in: ['all', role] }, targetUser: { $exists: false } },
+                { targetRole: { $in: ['all', role] }, targetUser: null },
+                { targetUser: req.user.id }
+            ]
         }).sort({ createdAt: -1 }).limit(50);
 
         res.status(200).json({ success: true, count: notifications.length, data: notifications });
+    } catch (error) { next(error); }
+};
+
+// @desc    Check if user has unread notifications
+// @route   GET /api/v1/notifications/unread
+// @access  Private
+export const getUnreadNotificationCount = async (req, res, next) => {
+    try {
+        const role = req.user.role;
+        const lastSeen = req.user.lastSeenNotifications || new Date(0);
+        
+        const count = await Notification.countDocuments({
+            createdAt: { $gt: lastSeen },
+            $or: [
+                { targetRole: { $in: ['all', role] }, targetUser: { $exists: false } },
+                { targetRole: { $in: ['all', role] }, targetUser: null },
+                { targetUser: req.user.id }
+            ]
+        });
+
+        res.status(200).json({ success: true, hasUnread: count > 0, count });
+    } catch (error) { next(error); }
+};
+
+// @desc    Mark notifications as read
+// @route   PATCH /api/v1/notifications/read
+// @access  Private
+export const markNotificationsRead = async (req, res, next) => {
+    try {
+        req.user.lastSeenNotifications = new Date();
+        await req.user.save({ validateBeforeSave: false });
+        res.status(200).json({ success: true, message: 'Notifications marked as read' });
     } catch (error) { next(error); }
 };

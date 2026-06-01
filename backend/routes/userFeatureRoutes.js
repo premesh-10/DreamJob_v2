@@ -6,7 +6,9 @@ import {
     deleteReview,
     reportReview,
     submitFeedback,
-    getMyNotifications
+    getMyNotifications,
+    getUnreadNotificationCount,
+    markNotificationsRead
 } from '../controllers/userFeaturesController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
@@ -28,5 +30,7 @@ router.post('/feedback', protect, submitFeedback);
 
 // ── User notifications
 router.get('/notifications/me', protect, getMyNotifications);
+router.get('/notifications/unread', protect, getUnreadNotificationCount);
+router.patch('/notifications/read', protect, markNotificationsRead);
 
 export default router;

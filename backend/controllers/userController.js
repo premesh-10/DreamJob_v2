@@ -1,4 +1,6 @@
 import User from '../models/User.js';
+import { uploadAvatar, deleteUploadedFile } from '../middleware/uploadMiddleware.js';
+import multer from 'multer';
 
 // @desc    Update user profile
 // @route   PUT /api/v1/users/profile
@@ -34,11 +36,81 @@ export const updateProfile = async (req, res, next) => {
                     gender: updatedUser.gender,
                     qualification: updatedUser.qualification,
                     country: updatedUser.country,
+                    profilePic: updatedUser.profilePic,
                 }
             });
         } else {
             res.status(404).json({ message: 'User not found' });
         }
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Upload / change profile picture
+// @route   POST /api/v1/users/profile/avatar
+// @access  Private
+export const uploadProfilePic = (req, res, next) => {
+    uploadAvatar(req, res, async (err) => {
+        if (err instanceof multer.MulterError) {
+            return res.status(400).json({ message: `Upload error: ${err.message}` });
+        } else if (err) {
+            return res.status(400).json({ message: err.message });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({ message: 'No image file provided' });
+        }
+
+        try {
+            const user = await User.findById(req.user.id);
+            if (!user) return res.status(404).json({ message: 'User not found' });
+
+            // Delete old avatar from disk (only if it was a local upload, not an external URL)
+            if (user.profilePic && user.profilePic.startsWith('/uploads/')) {
+                deleteUploadedFile(user.profilePic);
+            }
+
+            // Save the new path
+            user.profilePic = `/uploads/avatars/${req.file.filename}`;
+            await user.save();
+
+            res.status(200).json({
+                success: true,
+                data: {
+                    id: user._id,
+                    name: user.name,
+                    email: user.email,
+                    role: user.role,
+                    mobile: user.mobile,
+                    experience: user.experience,
+                    gender: user.gender,
+                    qualification: user.qualification,
+                    country: user.country,
+                    profilePic: user.profilePic,
+                }
+            });
+        } catch (error) {
+            next(error);
+        }
+    });
+};
+
+// @desc    Remove profile picture (revert to initials)
+// @route   DELETE /api/v1/users/profile/avatar
+// @access  Private
+export const removeProfilePic = async (req, res, next) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        if (user.profilePic && user.profilePic.startsWith('/uploads/')) {
+            deleteUploadedFile(user.profilePic);
+        }
+        user.profilePic = '';
+        await user.save();
+
+        res.status(200).json({ success: true, data: { profilePic: '' } });
     } catch (error) {
         next(error);
     }

@@ -12,6 +12,12 @@ import Interviews from './pages/Interviews';
 import Bookings from './pages/Bookings';
 import Pricing from './pages/Pricing';
 import Success from './pages/Success';
+import Webinars from './pages/Webinars';
+import Reports from './pages/Reports';
+import PracticeTests from './pages/PracticeTests';
+import PracticeTestDetail from './pages/PracticeTestDetail';
+import PracticeTestQuiz from './pages/PracticeTestQuiz';
+import PracticeTestReport from './pages/PracticeTestReport';
 
 // Admin pages
 import AdminDashboard from './pages/AdminDashboard';
@@ -30,6 +36,8 @@ import AdminSecurity from './pages/admin/Security';
 import AdminSettings from './pages/admin/Settings';
 import AdminInterviews from './pages/admin/Interviews';
 import AdminReviews from './pages/admin/Reviews';
+import AdminWebinars from './pages/admin/Webinars';
+import AdminPracticeTests from './pages/admin/PracticeTests';
 
 // User feature pages
 import Notifications from './pages/Notifications';
@@ -40,12 +48,15 @@ import SellerLogin from './pages/seller/SellerLogin';
 import SellerRegister from './pages/seller/SellerRegister';
 import SellerOverview from './pages/seller/SellerOverview';
 import MyCourses from './pages/seller/MyCourses';
+import SellerPracticeTests from './pages/seller/PracticeTests';
 import InterviewSchedule from './pages/seller/InterviewSchedule';
 import RevenueAnalytics from './pages/seller/RevenueAnalytics';
 import SellerWallet from './pages/seller/SellerWallet';
 import SellerOrders from './pages/seller/SellerOrders';
 import SellerStudents from './pages/seller/SellerStudents';
 import SellerProfile from './pages/seller/SellerProfile';
+import SellerWebinars from './pages/seller/SellerWebinars';
+import SellerNotifications from './pages/seller/Notifications';
 
 function App() {
   return (
@@ -63,10 +74,18 @@ function App() {
             <Route path="/courses/:id" element={<CourseDetails />} />
             <Route path="/interviews" element={<Interviews />} />
             <Route path="/history" element={<Bookings />} />
+            <Route path="/reports" element={<Reports />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/success" element={<Success />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/feedback" element={<FeedbackPage />} />
+            <Route path="/webinars" element={<Webinars />} />
+
+            {/* ── Practice Tests (User) ── */}
+            <Route path="/practice-tests" element={<PracticeTests />} />
+            <Route path="/practice-tests/:id" element={<PracticeTestDetail />} />
+            <Route path="/practice-tests/:id/quiz" element={<PracticeTestQuiz />} />
+            <Route path="/practice-tests/:id/attempts/:attemptId" element={<PracticeTestReport />} />
 
             {/* ── Admin Routes ── */}
             <Route path="/admin" element={<AdminDashboard />} />
@@ -85,18 +104,23 @@ function App() {
             <Route path="/admin/security" element={<AdminSecurity />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
             <Route path="/admin/reviews" element={<AdminReviews />} />
+            <Route path="/admin/webinars" element={<AdminWebinars />} />
+            <Route path="/admin/practice-tests" element={<AdminPracticeTests />} />
 
             {/* ── Seller Portal Routes ── */}
             <Route path="/seller/login" element={<SellerLogin />} />
             <Route path="/seller/register" element={<SellerRegister />} />
             <Route path="/seller" element={<SellerOverview />} />
             <Route path="/seller/courses" element={<MyCourses />} />
+            <Route path="/seller/practice-tests" element={<SellerPracticeTests />} />
             <Route path="/seller/interviews" element={<InterviewSchedule />} />
             <Route path="/seller/revenue" element={<RevenueAnalytics />} />
             <Route path="/seller/wallet" element={<SellerWallet />} />
             <Route path="/seller/orders" element={<SellerOrders />} />
             <Route path="/seller/students" element={<SellerStudents />} />
             <Route path="/seller/profile" element={<SellerProfile />} />
+            <Route path="/seller/webinars" element={<SellerWebinars />} />
+            <Route path="/seller/notifications" element={<SellerNotifications />} />
           </Routes>
         </div>
       </Router>

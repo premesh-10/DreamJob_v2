@@ -1,23 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { setUser } from '../features/auth/authSlice';
 import api from '../lib/api';
 import Layout from '../components/Layout';
 
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:5000';
+
+function getAvatarUrl(pic) {
+    if (!pic) return null;
+    if (pic.startsWith('http')) return pic;
+    return `${API_BASE}${pic}`;
+}
+
 function Profile() {
     const { user } = useSelector((state) => state.auth);
     const dispatch = useDispatch();
+    const fileInputRef = useRef(null);
+
     const [formData, setFormData] = useState({
-        name: '',
-        mobile: '',
-        experience: '',
-        gender: '',
-        qualification: '',
-        country: '',
+        name: '', mobile: '', experience: '', gender: '', qualification: '', country: '',
     });
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [avatarLoading, setAvatarLoading] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
+    const [errorMsg, setErrorMsg] = useState('');
+    const [avatarPreview, setAvatarPreview] = useState(null);
 
     useEffect(() => {
         if (user) {
@@ -29,40 +37,79 @@ function Profile() {
                 qualification: user.qualification || '',
                 country: user.country || '',
             });
+            setAvatarPreview(getAvatarUrl(user.profilePic));
         }
     }, [user]);
 
-    const onChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
+    const onChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
     const onSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-        setSuccessMsg('');
+        setSuccessMsg(''); setErrorMsg('');
         try {
             const { data } = await api.put('/users/profile', formData);
-            
-            // Update Redux store so sidebar and everywhere else reflects new name instantly
             dispatch(setUser(data.data));
-            
             setIsEditing(false);
             setSuccessMsg('Profile updated successfully!');
             setTimeout(() => setSuccessMsg(''), 3000);
         } catch (error) {
-            console.error(error);
-            alert('Failed to update profile: ' + (error.response?.data?.message || error.message));
+            setErrorMsg('Failed to update: ' + (error.response?.data?.message || error.message));
         }
         setLoading(false);
     };
 
+    const handleAvatarChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Preview immediately
+        const objectUrl = URL.createObjectURL(file);
+        setAvatarPreview(objectUrl);
+
+        setAvatarLoading(true);
+        setSuccessMsg(''); setErrorMsg('');
+        try {
+            const formPayload = new FormData();
+            formPayload.append('avatar', file);
+            const { data } = await api.post('/users/profile/avatar', formPayload, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            dispatch(setUser(data.data));
+            setAvatarPreview(getAvatarUrl(data.data.profilePic));
+            setSuccessMsg('Profile picture updated!');
+            setTimeout(() => setSuccessMsg(''), 3000);
+        } catch (error) {
+            setAvatarPreview(getAvatarUrl(user?.profilePic));
+            setErrorMsg('Failed to upload image: ' + (error.response?.data?.message || error.message));
+        }
+        setAvatarLoading(false);
+    };
+
+    const handleRemoveAvatar = async () => {
+        if (!window.confirm('Remove profile picture?')) return;
+        setAvatarLoading(true);
+        try {
+            await api.delete('/users/profile/avatar');
+            setAvatarPreview(null);
+            dispatch(setUser({ ...user, profilePic: '' }));
+            setSuccessMsg('Profile picture removed.');
+            setTimeout(() => setSuccessMsg(''), 3000);
+        } catch (error) {
+            setErrorMsg('Failed to remove picture.');
+        }
+        setAvatarLoading(false);
+    };
+
+    const initials = user?.name?.charAt(0)?.toUpperCase() || '?';
+
     return (
         <Layout>
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-4xl mx-auto py-4">
                 <div className="flex items-center justify-between mb-8">
                     <h1 className="text-3xl font-bold text-slate-900">My Profile</h1>
                     <button
-                        onClick={() => setIsEditing(!isEditing)}
+                        onClick={() => { setIsEditing(!isEditing); setErrorMsg(''); }}
                         className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition"
                     >
                         {isEditing ? 'Cancel' : 'Edit Profile'}
@@ -70,54 +117,99 @@ function Profile() {
                 </div>
 
                 {successMsg && (
-                    <div className="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl font-medium">
-                        ✓ {successMsg}
+                    <div className="mb-5 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl font-medium flex items-center gap-2">
+                        <span>✓</span> {successMsg}
+                    </div>
+                )}
+                {errorMsg && (
+                    <div className="mb-5 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl font-medium flex items-center gap-2">
+                        <span>⚠</span> {errorMsg}
                     </div>
                 )}
 
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-                    <form onSubmit={onSubmit} className="space-y-6">
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    {/* Avatar Section */}
+                    <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-8 py-8 flex items-center gap-6">
+                        <div className="relative flex-shrink-0">
+                            <div className="w-24 h-24 rounded-full bg-white/20 border-4 border-white/40 overflow-hidden flex items-center justify-center text-white text-3xl font-black shadow-lg">
+                                {avatarLoading ? (
+                                    <div className="w-7 h-7 border-4 border-white border-t-transparent rounded-full animate-spin" />
+                                ) : avatarPreview ? (
+                                    <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" onError={() => setAvatarPreview(null)} />
+                                ) : (
+                                    initials
+                                )}
+                            </div>
+                            {/* Upload overlay button */}
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={avatarLoading}
+                                className="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-violet-50 transition border-2 border-violet-200"
+                                title="Change photo"
+                            >
+                                <svg className="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                            </button>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleAvatarChange}
+                            />
+                        </div>
+                        <div className="text-white">
+                            <h2 className="text-xl font-black">{user?.name}</h2>
+                            <p className="text-white/70 text-sm">{user?.email}</p>
+                            <p className="text-white/60 text-xs mt-1 capitalize">{user?.role}</p>
+                            <div className="flex items-center gap-3 mt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={avatarLoading}
+                                    className="text-xs bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-full transition font-medium"
+                                >
+                                    {avatarPreview ? '📷 Change Photo' : '📷 Upload Photo'}
+                                </button>
+                                {avatarPreview && (
+                                    <button
+                                        type="button"
+                                        onClick={handleRemoveAvatar}
+                                        disabled={avatarLoading}
+                                        className="text-xs bg-white/10 hover:bg-red-500/40 text-white/80 px-3 py-1 rounded-full transition font-medium"
+                                    >
+                                        Remove
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Form Section */}
+                    <form onSubmit={onSubmit} className="p-8 space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
-                                <input
-                                    type="text"
-                                    name="name"
-                                    value={formData.name}
-                                    onChange={onChange}
-                                    disabled={!isEditing}
-                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-slate-50 disabled:text-slate-500"
-                                />
+                                <input type="text" name="name" value={formData.name} onChange={onChange} disabled={!isEditing}
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 disabled:bg-slate-50 disabled:text-slate-500 transition" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Email (Read Only)</label>
-                                <input
-                                    type="email"
-                                    value={user?.email || ''}
-                                    disabled
-                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-500"
-                                />
+                                <input type="email" value={user?.email || ''} disabled
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-500" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Mobile</label>
-                                <input
-                                    type="text"
-                                    name="mobile"
-                                    value={formData.mobile}
-                                    onChange={onChange}
-                                    disabled={!isEditing}
-                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 disabled:bg-slate-50 disabled:text-slate-500"
-                                />
+                                <input type="text" name="mobile" value={formData.mobile} onChange={onChange} disabled={!isEditing}
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 disabled:bg-slate-50 disabled:text-slate-500 transition" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
-                                <select
-                                    name="gender"
-                                    value={formData.gender}
-                                    onChange={onChange}
-                                    disabled={!isEditing}
-                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 disabled:bg-slate-50 disabled:text-slate-500"
-                                >
+                                <select name="gender" value={formData.gender} onChange={onChange} disabled={!isEditing}
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 disabled:bg-slate-50 disabled:text-slate-500 transition">
                                     <option value="">Select Gender</option>
                                     <option value="Male">Male</option>
                                     <option value="Female">Female</option>
@@ -126,38 +218,20 @@ function Profile() {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Experience</label>
-                                <input
-                                    type="text"
-                                    name="experience"
-                                    value={formData.experience}
-                                    onChange={onChange}
-                                    disabled={!isEditing}
+                                <input type="text" name="experience" value={formData.experience} onChange={onChange} disabled={!isEditing}
                                     placeholder="e.g. 3 years"
-                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 disabled:bg-slate-50 disabled:text-slate-500"
-                                />
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 disabled:bg-slate-50 disabled:text-slate-500 transition" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Country</label>
-                                <input
-                                    type="text"
-                                    name="country"
-                                    value={formData.country}
-                                    onChange={onChange}
-                                    disabled={!isEditing}
-                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 disabled:bg-slate-50 disabled:text-slate-500"
-                                />
+                                <input type="text" name="country" value={formData.country} onChange={onChange} disabled={!isEditing}
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 disabled:bg-slate-50 disabled:text-slate-500 transition" />
                             </div>
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Qualification</label>
-                                <input
-                                    type="text"
-                                    name="qualification"
-                                    value={formData.qualification}
-                                    onChange={onChange}
-                                    disabled={!isEditing}
+                                <input type="text" name="qualification" value={formData.qualification} onChange={onChange} disabled={!isEditing}
                                     placeholder="e.g. B.Tech Computer Science"
-                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 disabled:bg-slate-50 disabled:text-slate-500"
-                                />
+                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-violet-500 disabled:bg-slate-50 disabled:text-slate-500 transition" />
                             </div>
                         </div>
 
@@ -183,11 +257,8 @@ function Profile() {
 
                         {isEditing && (
                             <div className="flex justify-end pt-4 border-t border-slate-100">
-                                <button
-                                    type="submit"
-                                    disabled={loading}
-                                    className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition disabled:opacity-60"
-                                >
+                                <button type="submit" disabled={loading}
+                                    className="px-6 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition disabled:opacity-60 font-semibold">
                                     {loading ? 'Saving...' : 'Save Changes'}
                                 </button>
                             </div>

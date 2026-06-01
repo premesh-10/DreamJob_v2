@@ -23,7 +23,9 @@ function Notifications() {
             .then(r => setNotifications(r.data.data || []))
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [user]);
+
+        api.patch('/notifications/read').catch(console.error);
+    }, [user, navigate]);
 
     const formatTime = (date) => {
         const d = new Date(date);

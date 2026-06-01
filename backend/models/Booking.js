@@ -30,6 +30,11 @@ const bookingSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     },
+    enrollmentType: {
+        type: String,
+        enum: ['subscription', 'purchase'],
+        default: 'purchase'
+    },
     status: {
         type: String,
         enum: ['pending', 'confirmed', 'in-progress', 'completed', 'cancelled'],

@@ -1,7 +1,8 @@
 import express from 'express';
 import {
     getAnalytics, getUsers, toggleBlockUser, updateUserRole,
-    getAdminSellers, getAdminPayments, getAdminCourses, toggleCoursePublished,
+    getAdminSellers, getAdminPayments, getAdminCourses, toggleCoursePublished, adminDeleteCourse, adminDeleteChapter,
+    adminApproveChapter, adminApproveResource, adminRejectCourseRequest, adminRejectChapterRequest,
     getAdminInterviews,
     getAdminBookings,
     getAdminWallet,
@@ -14,6 +15,13 @@ import {
     getAdminSettings, updateAdminSettings,
     getAdminReviews, hideReview, deleteAdminReview
 } from '../controllers/adminController.js';
+import {
+    adminGetAllWebinars, adminToggleWebinar, adminUpdateWebinar, adminDeleteWebinar, adminCancelWebinar
+} from '../controllers/webinarController.js';
+import {
+    adminGetAllPracticeTests, adminTogglePracticeTestPublish,
+    adminDeletePracticeTest, adminGetTestAttempts
+} from '../controllers/practiceTestController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -36,6 +44,13 @@ router.get('/sellers', getAdminSellers);
 // ── Courses
 router.get('/courses', getAdminCourses);
 router.patch('/courses/:id/publish', toggleCoursePublished);
+router.patch('/courses/:id/reject', adminRejectCourseRequest);
+router.delete('/courses/:id', adminDeleteCourse);
+router.delete('/courses/:id/chapters/:chapterId', adminDeleteChapter);
+router.get('/courses/:id', getAdminCourses);
+router.patch('/courses/:id/chapters/:chapterId/approve', adminApproveChapter);
+router.patch('/courses/:id/chapters/:chapterId/reject', adminRejectChapterRequest);
+router.patch('/courses/:id/resources/:resourceId/approve', adminApproveResource);
 
 // ── Interviews
 router.get('/interviews', getAdminInterviews);
@@ -80,5 +95,18 @@ router.put('/settings', authorize('admin', 'super_admin'), updateAdminSettings);
 router.get('/reviews', getAdminReviews);
 router.patch('/reviews/:id/hide', hideReview);
 router.delete('/reviews/:id', deleteAdminReview);
+
+// ── Webinars
+router.get('/webinars', adminGetAllWebinars);
+router.put('/webinars/:id', adminUpdateWebinar);
+router.patch('/webinars/:id/toggle', adminToggleWebinar);
+router.patch('/webinars/:id/cancel', adminCancelWebinar);
+router.delete('/webinars/:id', adminDeleteWebinar);
+
+// ── Practice Tests
+router.get('/practice-tests', adminGetAllPracticeTests);
+router.patch('/practice-tests/:id/publish', adminTogglePracticeTestPublish);
+router.delete('/practice-tests/:id', adminDeletePracticeTest);
+router.get('/practice-tests/:id/attempts', adminGetTestAttempts);
 
 export default router;

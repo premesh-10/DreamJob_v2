@@ -14,6 +14,10 @@ const notificationSchema = new mongoose.Schema({
         enum: ['all', 'user', 'seller', 'admin'],
         default: 'all'
     },
+    targetUser: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
     type: {
         type: String,
         enum: ['info', 'warning', 'success', 'alert'],

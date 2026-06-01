@@ -33,6 +33,10 @@ const userSchema = new mongoose.Schema({
     country: {
         type: String
     },
+    profilePic: {
+        type: String,
+        default: ''
+    },
     password: {
         type: String,
         required: [true, 'Please add a password'],
@@ -64,6 +68,10 @@ const userSchema = new mongoose.Schema({
     isBlocked: {
         type: Boolean,
         default: false
+    },
+    lastSeenNotifications: {
+        type: Date,
+        default: Date.now
     }
 }, {
     timestamps: true

@@ -1,12 +1,23 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout, reset } from '../features/auth/authSlice';
+import { useState, useEffect } from 'react';
+import api from '../lib/api';
 
 function Sidebar() {
     const location = useLocation();
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const { user } = useSelector((state) => state.auth);
+    const [hasUnread, setHasUnread] = useState(false);
+
+    useEffect(() => {
+        if (user) {
+            api.get('/notifications/unread')
+                .then(r => setHasUnread(r.data.hasUnread))
+                .catch(console.error);
+        }
+    }, [user, location.pathname]);
 
     const onLogout = async () => {
         dispatch(reset());
@@ -19,8 +30,11 @@ function Sidebar() {
         { name: 'Profile', path: '/profile' },
         { name: 'Wallet', path: '/wallet' },
         { name: 'Course Catalog', path: '/courses' },
+        { name: 'Practice Tests', path: '/practice-tests' },
         { name: 'Mock Interviews', path: '/interviews' },
+        { name: 'Live Webinars', path: '/webinars' },
         { name: 'Purchase History', path: '/history' },
+        { name: 'My Reports', path: '/reports' },
         { name: 'Subscriptions', path: '/pricing' },
         { name: 'Notifications', path: '/notifications' },
         { name: 'Give Feedback', path: '/feedback' },
@@ -47,7 +61,12 @@ function Sidebar() {
                                 : 'hover:bg-slate-800 hover:text-white'
                         }`}
                     >
-                        {item.name}
+                        <div className="flex items-center justify-between">
+                            <span>{item.name}</span>
+                            {item.name === 'Notifications' && hasUnread && (
+                                <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                            )}
+                        </div>
                     </Link>
                 ))}
             </nav>
@@ -69,8 +88,14 @@ function Sidebar() {
             </div>
             <div className="p-4 border-t border-slate-800">
                 <div className="flex items-center space-x-3 mb-4 px-2">
-                    <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">
-                        {user?.name?.charAt(0).toUpperCase()}
+                    <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0">
+                        {user?.profilePic ? (
+                            <img src={user.profilePic.startsWith('http') ? user.profilePic : `${import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:5000'}${user.profilePic}`}
+                                alt={user.name} className="w-full h-full object-cover"
+                                onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                            />
+                        ) : null}
+                        <span style={{ display: user?.profilePic ? 'none' : 'flex' }}>{user?.name?.charAt(0).toUpperCase()}</span>
                     </div>
                     <div>
                         <p className="text-sm font-medium text-white">{user?.name}</p>

@@ -9,6 +9,11 @@ const withdrawalSchema = new mongoose.Schema({
         enum: ['initiated', 'approval_in_progress', 'completed', 'rejected'],
         default: 'initiated'
     },
+    type: {
+        type: String,
+        enum: ['withdrawal', 'admin_adjustment'],
+        default: 'withdrawal'
+    },
     bankDetails: {
         accountName: { type: String, default: '' },
         accountNumber: { type: String, default: '' },
@@ -41,10 +46,6 @@ const sellerSchema = new mongoose.Schema({
     },
     // Profile info
     bio: {
-        type: String,
-        default: ''
-    },
-    profilePic: {
         type: String,
         default: ''
     },
