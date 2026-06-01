@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'https://dream-job-v2.vercel.app';
+const API_BASE_URL = 'https://dreamjob-v2-hrdh.onrender.com';
 
 const api = axios.create({
     baseURL: API_BASE_URL,
