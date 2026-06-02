@@ -55,7 +55,7 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors({
-    origin: [process.env.FRONTEND_URL || 'https://dream-job-v2.vercel.app'],
+    origin: ['https://dream-job-v2.vercel.app'],
     credentials: true,
 }));
 
