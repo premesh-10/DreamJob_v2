@@ -37,7 +37,7 @@ function AdminSellers() {
     const handleStatusChange = async (sellerId, newStatus) => {
         if(window.confirm(`Change seller status to ${newStatus}?`)) {
             try {
-                await api.patch(`/sellers/${sellerId}/status`, { status: newStatus });
+                await api.put(`/sellers/${sellerId}/status`, { status: newStatus });
                 alert('Seller status updated successfully');
                 // Refresh data
                 const { data } = await api.get('/admin/sellers');
@@ -52,7 +52,7 @@ function AdminSellers() {
         e.preventDefault();
         setAdjustingWallet(true);
         try {
-            const { data } = await api.patch(`/sellers/${viewSeller._id}/wallet`, {
+            const { data } = await api.post(`/sellers/${viewSeller._id}/wallet-adjust`, {
                 action: walletForm.action,
                 amount: walletForm.amount,
                 description: walletForm.description
