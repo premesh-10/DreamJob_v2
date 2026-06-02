@@ -8,7 +8,7 @@ import {
 import AdminLayout from '../../components/AdminLayout';
 import ExportButtons from '../../components/ExportButtons';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = 'https://dreamjob-v2-hrdh.onrender.com';
 const getFileUrl = (p) => p ? (p.startsWith('http') ? p : `${API_BASE}${p}`) : '';
 const formatSize = (bytes) => {
     if (!bytes) return '';
