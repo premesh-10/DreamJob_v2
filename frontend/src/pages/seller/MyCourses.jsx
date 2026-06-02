@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import SellerLayout from '../../components/SellerLayout';
 import api from '../../lib/api';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = 'https://dreamjob-v2-hrdh.onrender.com';
 const LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
 const CATEGORIES = ['Web Development', 'Mobile Development', 'Data Science', 'Machine Learning', 'DevOps', 'Cloud Computing', 'Cybersecurity', 'UI/UX Design', 'Business', 'Marketing', 'Finance', 'Career Development', 'Other'];
 
