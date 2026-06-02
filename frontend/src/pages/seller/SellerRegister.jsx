@@ -96,8 +96,14 @@ function ApplicationStatusTracker({ application }) {
                     )}
 
                     {(application.status === 'applied' || application.status === 'verifying') && (
-                        <div className="mt-8 p-4 bg-indigo-50 border border-indigo-200 rounded-xl text-sm text-indigo-700">
-                            <p>⏱ Approval typically takes <strong>24–48 hours</strong>. You'll be notified once your status changes.</p>
+                        <div className="mt-8 space-y-4">
+                            <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl text-sm text-indigo-700">
+                                <p>⏱ Approval typically takes <strong>24–48 hours</strong>. You'll be notified once your status changes.</p>
+                            </div>
+                            <Link to="/"
+                                className="inline-block w-full py-3 bg-white border-2 border-indigo-100 text-indigo-700 text-center font-bold rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition">
+                                ← Back to Main Platform
+                            </Link>
                         </div>
                     )}
                 </div>
