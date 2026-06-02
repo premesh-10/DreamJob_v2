@@ -71,7 +71,7 @@ export const getAnalytics = async (req, res, next) => {
         const totalRevenue = courseRevenue + interviewRevenue;
 
         const totalBookings = await Booking.countDocuments();
-        const pendingSellers = await Seller.countDocuments({ status: 'pending' });
+        const pendingSellers = await Seller.countDocuments({ status: { $in: ['applied', 'verifying'] } });
 
         // Recent 7-day revenue trend
         const sevenDaysAgo = new Date();
